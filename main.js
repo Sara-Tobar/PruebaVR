@@ -7,6 +7,9 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 
 let scene, camera, renderer, world, ball, ballBody;
 let pins = [], pinBodies = [], pinStartTransforms = [];
+let raycaster;
+let laserLine;
+let pointer = new THREE.Vector2(0, 0);
 
 init();
 animate();
@@ -128,35 +131,7 @@ function init() {
   createPins();
 
   //modelos
-const loader = new GLTFLoader();
-loader.load(
-  './bowling_ball_return.glb',
-  (gltf) => {
-    console.log('✅ Modelo cargado correctamente');
-    const model = gltf.scene;
 
-    // Escala y posición de prueba
-    model.scale.set(1.5, 1.5, 1.5);
-    model.position.set(20, 0, -50);
-    model.rotation.set(0, Math.PI, 0);
-
-    scene.add(model);
-  },
-);
-const loader2 = new GLTFLoader();
-loader2.load(
-  './bowling_ball_return.glb',
-  (gltf) => {
-    const model2 = gltf.scene;
-
-    // Escala y posición de prueba
-    model2.scale.set(1.5, 1.5, 1.5);
-    model2.position.set(27, 0, -50);
-    model2.rotation.set(0, Math.PI, 0);
-
-    scene.add(model2);
-  },
-);
 const loader3 = new GLTFLoader();
 loader3.load(
   './bolos.glb',
@@ -194,8 +169,48 @@ loader4.load(
     }
   });
 
-  window.addEventListener('resize', onWindowResize);
+ 
+
+  raycaster = new THREE.Raycaster();
+
+  // Línea láser (neón cyan, estilo cyberpunk)
+  const laserMaterial = new THREE.LineBasicMaterial({
+    color: 0x00ffff,
+    linewidth: 3,
+    opacity: 0.9,
+    transparent: true
+  });
+
+  const laserGeometry = new THREE.BufferGeometry();
+  const positions = new Float32Array(6); // 2 puntos (origen y destino)
+  positions.fill(0);
+  laserGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+
+  laserLine = new THREE.Line(laserGeometry, laserMaterial);
+  laserLine.visible = false; // se activa solo cuando hay hit
+  scene.add(laserLine);
+
+  // Actualizar el raycaster cada frame (mouse o toque)
+  window.addEventListener('mousemove', onPointerMove);
+  window.addEventListener('touchmove', onPointerMove);
 }
+
+function onPointerMove(event) {
+  if (event.isPrimary === false) return;
+
+  let clientX, clientY;
+  if (event.touches) {
+    clientX = event.touches[0].clientX;
+    clientY = event.touches[0].clientY;
+  } else {
+    clientX = event.clientX;
+    clientY = event.clientY;
+  }
+
+  pointer.x = (clientX / window.innerWidth) * 2 - 1;
+  pointer.y = -(clientY / window.innerHeight) * 2 + 1;
+}
+
 
 function createPins() {
   //const pinGeometry = new THREE.CylinderGeometry(0.1, 0.1, 0.6, 16);
@@ -261,36 +276,6 @@ function createPins() {
 }
 
 
-
-function resetScene() {
-  // 🔹 Reiniciar bola
-  ballBody.velocity.set(0, 0, 0);
-  ballBody.angularVelocity.set(0, 0, 0);
-  ballBody.position.set(0, ballRadius + 0.05, 8);
-  ballBody.quaternion.set(0, 0, 0, 1);
-
-  // 🔹 Reiniciar bolos
-  for (let i = 0; i < pinBodies.length; i++) {
-    const start = pinStartTransforms[i];
-
-    // cuerpo físico
-    pinBodies[i].velocity.set(0, 0, 0);
-    pinBodies[i].angularVelocity.set(0, 0, 0);
-    pinBodies[i].position.copy(start.position);
-    pinBodies[i].quaternion.copy(start.quaternion);
-
-    // malla invisible
-    pins[i].position.copy(start.position);
-    pins[i].quaternion.copy(start.quaternion);
-
-    // modelo GLB vinculado
-    if (pins[i].userData.model) {
-      pins[i].userData.model.position.copy(start.position);
-      pins[i].userData.model.quaternion.copy(start.quaternion);
-    }
-  }
-}
-
 function animate() {
   requestAnimationFrame(animate);
   world.step(1 / 60);
@@ -300,30 +285,48 @@ function animate() {
   ball.quaternion.copy(ballBody.quaternion);
 
   // Sincronizar bolos
-  // for (let i = 0; i < pins.length; i++) {
-  //   pins[i].position.copy(pinBodies[i].position);
-  //   pins[i].quaternion.copy(pinBodies[i].quaternion);
-  // }
-
-  // // Reinicio cuando la bola llega al final
-  // if (ballBody.position.z < -16) {
-  //   resetBallAndPins();
-  // }
   for (let i = 0; i < pins.length; i++) {
-  pins[i].position.copy(pinBodies[i].position);
-  pins[i].quaternion.copy(pinBodies[i].quaternion);
+    pins[i].position.copy(pinBodies[i].position);
+    pins[i].quaternion.copy(pinBodies[i].quaternion);
 
-  if (pins[i].userData.model) {
-    pins[i].userData.model.position.copy(pinBodies[i].position);
-    pins[i].userData.model.quaternion.copy(pinBodies[i].quaternion);
+    if (pins[i].userData.model) {
+      pins[i].userData.model.position.copy(pinBodies[i].position);
+      pins[i].userData.model.quaternion.copy(pinBodies[i].quaternion);
+    }
   }
-}
+
+  // === ACTUALIZAR RAYCASTER Y LÁSER ===
+  raycaster.setFromCamera(pointer, camera);
+
+  // Detectar colisión con el piso o los bolos
+  const intersects = raycaster.intersectObjects(scene.children, true);
+
+  if (intersects.length > 0) {
+    const point = intersects[0].point;
+
+    // Actualizar línea láser: desde la cámara hasta el punto de impacto
+    const positions = laserLine.geometry.attributes.position.array;
+    positions[0] = camera.position.x;
+    positions[1] = camera.position.y;
+    positions[2] = camera.position.z;
+    positions[3] = point.x;
+    positions[4] = point.y + 0.01; // un poquito arriba del suelo para no hacer z-fight
+    positions[5] = point.z;
+
+    laserLine.geometry.attributes.position.needsUpdate = true;
+    laserLine.visible = true;
+
+    // Opcional: cambiar color si apuntas a un bolo
+    const hitPin = intersects[0].object;
+    if (hitPin === ball || pins.includes(hitPin) || pinBodies.some(body => body === hitPin.body)) {
+      laserLine.material.color.set(0xff00ff); // magenta si apuntas a bolo o bola
+    } else {
+      laserLine.material.color.set(0x00ffff); // cyan normal
+    }
+
+  } else {
+    laserLine.visible = false;
+  }
 
   renderer.render(scene, camera);
-}
-
-function onWindowResize() {
-  camera.aspect = window.innerWidth / window.innerHeight;
-  camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
 }
