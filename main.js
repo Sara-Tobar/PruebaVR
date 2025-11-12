@@ -6,8 +6,8 @@ import { VRButton } from 'three/addons/webxr/VRButton.js';
 const scene = new THREE.Scene();
 
 // Cámara (perspectiva, ideal para VR)
-const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 1.6, 6); // Posición a altura de ojos
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.01, 1000);
+camera.position.set(0, 1.6, 5); // Posición a altura de ojos
 
 // Renderer con soporte WebXR para VR
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -21,15 +21,15 @@ document.body.appendChild(VRButton.createButton(renderer));
 
 // Cuarto (room)
 // Piso (gris claro)
-const floorGeometry = new THREE.PlaneGeometry(10, 10);
-const floorMaterial = new THREE.MeshBasicMaterial({ color: 0xcccccc, side: THREE.DoubleSide });
+const floorGeometry = new THREE.BoxGeometry(10, 0.1, 10);
+const floorMaterial = new THREE.MeshStandardMaterial({ color: 0xcccccc });
 const floor = new THREE.Mesh(floorGeometry, floorMaterial);
-floor.rotation.x = -Math.PI / 2;
+floor.position.y = -0.05;
 scene.add(floor);
 
 // Paredes (blancas)
 const wallGeometry = new THREE.PlaneGeometry(10, 5);
-const wallMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
+const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide });
 
 // Pared trasera
 const backWall = new THREE.Mesh(wallGeometry, wallMaterial);
@@ -50,7 +50,7 @@ scene.add(rightWall);
 
 // Techo (gris claro)
 const ceilingGeometry = new THREE.PlaneGeometry(10, 10);
-const ceilingMaterial = new THREE.MeshBasicMaterial({ color: 0xdddddd, side: THREE.DoubleSide });
+const ceilingMaterial = new THREE.MeshStandardMaterial({ color: 0xdddddd, side: THREE.DoubleSide });
 const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
 ceiling.position.y = 5;
 ceiling.rotation.x = Math.PI / 2;
@@ -58,13 +58,13 @@ scene.add(ceiling);
 
 // Cubo en el centro (rojo para diferenciar)
 const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
-const cubeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+const cubeMaterial = new THREE.MeshStandardMaterial({ color: 0xff0000 });
 const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
 cube.position.set(0, 0.5, -2); // Sobre el piso
 scene.add(cube);
 
 // Luz ambiental (para que se vea todo)
-const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
 scene.add(ambientLight);
 
 // Raycaster y puntero (Vector2)
