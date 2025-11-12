@@ -7,7 +7,7 @@ const scene = new THREE.Scene();
 
 // Cámara (perspectiva, ideal para VR)
 const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
-camera.position.set(0, 1.6, 3); // Posición a altura de ojos
+camera.position.set(0, 1.6, 6); // Posición a altura de ojos
 
 // Renderer con soporte WebXR para VR
 const renderer = new THREE.WebGLRenderer({ antialias: true });
@@ -60,7 +60,7 @@ scene.add(ceiling);
 const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
 const cubeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
 const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
-cube.position.set(0, 0.5, 0); // Sobre el piso
+cube.position.set(0, 0.5, -2); // Sobre el piso
 scene.add(cube);
 
 // Luz ambiental (para que se vea todo)
