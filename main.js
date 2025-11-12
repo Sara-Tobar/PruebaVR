@@ -1,311 +1,132 @@
 import * as THREE from 'three';
-import * as CANNON from 'cannon';
-import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { VRButton } from 'three/addons/webxr/VRButton.js';
 
-let scene, camera, renderer, world, ball, ballBody;
-let pins = [], pinBodies = [], pinStartTransforms = [];
-let raycaster, laserLine, pointer = new THREE.Vector2(0, 0);
 
-init();
-animate();
+// Escena
+const scene = new THREE.Scene();
 
-function init() {
-  // === Escena ===
-  scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x000010);
+// Cámara (perspectiva, ideal para VR)
+const camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 1.6, 3); // Posición a altura de ojos
 
-  // === Cámara ===
-  camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 0.1, 100);
-  camera.position.set(0, 3, 13);
+// Renderer con soporte WebXR para VR
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.xr.enabled = true; // Habilita VR
+renderer.xr.setReferenceSpaceType( 'local' );
+document.body.appendChild(renderer.domElement);
 
-  // === Render ===
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.xr.enabled = true;
-  renderer.xr.setReferenceSpaceType('local');
+// Botón para entrar en modo VR (aparece automáticamente)
+document.body.appendChild(VRButton.createButton(renderer));
 
-  document.body.appendChild(VRButton.createButton(renderer));
-  document.body.appendChild(renderer.domElement);
-  renderer.shadowMap.enabled = true;
-  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+// Cuarto (room)
+// Piso (gris claro)
+const floorGeometry = new THREE.PlaneGeometry(10, 10);
+const floorMaterial = new THREE.MeshBasicMaterial({ color: 0xcccccc, side: THREE.DoubleSide });
+const floor = new THREE.Mesh(floorGeometry, floorMaterial);
+floor.rotation.x = -Math.PI / 2;
+scene.add(floor);
 
-  const controls = new OrbitControls(camera, renderer.domElement);
-  controls.enableDamping = true;
+// Paredes (blancas)
+const wallGeometry = new THREE.PlaneGeometry(10, 5);
+const wallMaterial = new THREE.MeshBasicMaterial({ color: 0xffffff, side: THREE.DoubleSide });
 
-  // === Mundo físico ===
-  world = new CANNON.World({ gravity: new CANNON.Vec3(0, -9.82, 0) });
-  world.broadphase = new CANNON.NaiveBroadphase();
+// Pared trasera
+const backWall = new THREE.Mesh(wallGeometry, wallMaterial);
+backWall.position.set(0, 2.5, -5);
+scene.add(backWall);
 
-  // === Piso ===
-  const floorMaterial = new THREE.MeshStandardMaterial({ color: 0x111122, roughness: 0.7 });
-  const floorGeometry = new THREE.BoxGeometry(20, 0.1, 35);
-  const floorMesh = new THREE.Mesh(floorGeometry, floorMaterial);
-  floorMesh.position.set(0, -0.05, 0);
-  floorMesh.receiveShadow = true;
-  scene.add(floorMesh);
+// Pared izquierda
+const leftWall = new THREE.Mesh(wallGeometry, wallMaterial);
+leftWall.position.set(-5, 2.5, 0);
+leftWall.rotation.y = Math.PI / 2;
+scene.add(leftWall);
 
-  const floorBody = new CANNON.Body({
-    mass: 0,
-    shape: new CANNON.Box(new CANNON.Vec3(10, 0.05, 17.5)),
-    position: new CANNON.Vec3(0, 0, 0)
-  });
-  world.addBody(floorBody);
+// Pared derecha
+const rightWall = new THREE.Mesh(wallGeometry, wallMaterial);
+rightWall.position.set(5, 2.5, 0);
+rightWall.rotation.y = -Math.PI / 2;
+scene.add(rightWall);
 
-  // === Líneas de neón laterales ===
-  const neonMaterial = new THREE.MeshStandardMaterial({
-    emissive: 0x00ffff,
-    emissiveIntensity: 5,
-    color: 0x00ffff
-  });
-  const lineGeometry = new THREE.BoxGeometry(0.1, 0.01, 35);
-  const neonPositionsX = [-9, -5, -2, 2, 5, 9];
+// Techo (gris claro)
+const ceilingGeometry = new THREE.PlaneGeometry(10, 10);
+const ceilingMaterial = new THREE.MeshBasicMaterial({ color: 0xdddddd, side: THREE.DoubleSide });
+const ceiling = new THREE.Mesh(ceilingGeometry, ceilingMaterial);
+ceiling.position.y = 5;
+ceiling.rotation.x = Math.PI / 2;
+scene.add(ceiling);
 
-  neonPositionsX.forEach((x) => {
-    const neonLine = new THREE.Mesh(lineGeometry, neonMaterial);
-    neonLine.position.set(x, 0.05, 0);
-    scene.add(neonLine);
-  });
+// Cubo en el centro (rojo para diferenciar)
+const cubeGeometry = new THREE.BoxGeometry(1, 1, 1);
+const cubeMaterial = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+const cube = new THREE.Mesh(cubeGeometry, cubeMaterial);
+cube.position.set(0, 0.5, 0); // Sobre el piso
+scene.add(cube);
 
-  // === Paredes y techo ===
-  const wallMaterial = new THREE.MeshStandardMaterial({
-    color: 0x0C0024,
-    emissive: 0x220044,
-    emissiveIntensity: 0.3
-  });
+// Luz ambiental (para que se vea todo)
+const ambientLight = new THREE.AmbientLight(0xffffff, 1);
+scene.add(ambientLight);
 
-  const wallBack = new THREE.Mesh(new THREE.BoxGeometry(20, 4, 0.1), wallMaterial);
-  wallBack.position.set(0, 2, -17.5);
-  scene.add(wallBack);
+// Raycaster y puntero (Vector2)
+const raycaster = new THREE.Raycaster();
+const pointer = new THREE.Vector2();
 
-  const wallLeft = new THREE.Mesh(new THREE.BoxGeometry(0.1, 4, 35), wallMaterial);
-  wallLeft.position.set(-10, 2, 0);
-  scene.add(wallLeft);
+// Línea para visualizar el rayo (azul)
+const lineMaterial = new THREE.LineBasicMaterial({ color: 0x0000ff });
+const lineGeometry = new THREE.BufferGeometry().setFromPoints([new THREE.Vector3(0, 0, 0), new THREE.Vector3(0, 0, -1)]);
+const rayLine = new THREE.Line(lineGeometry, lineMaterial);
+scene.add(rayLine);
 
-  const wallRight = new THREE.Mesh(new THREE.BoxGeometry(0.1, 4, 35), wallMaterial);
-  wallRight.position.set(10, 2, 0);
-  scene.add(wallRight);
-
-  const ceiling = new THREE.Mesh(new THREE.BoxGeometry(20, 0.1, 35), wallMaterial);
-  ceiling.position.set(0, 4, 0);
-  scene.add(ceiling);
-
-  // === Luces ===
-  const ambient = new THREE.AmbientLight(0x8888ff, 0.7);
-  scene.add(ambient);
-
-  const blueLight = new THREE.PointLight(0x0066ff, 1, 25);
-  blueLight.position.set(-5, 3, -5);
-  scene.add(blueLight);
-
-  const violetLight = new THREE.PointLight(0xaa00ff, 1, 25);
-  violetLight.position.set(5, 3, 5);
-  scene.add(violetLight);
-
-  // === Bola ===
-  const ballMaterial = new THREE.MeshStandardMaterial({
-    color: 0x00ffff,
-    emissive: 0x0088ff,
-    emissiveIntensity: 1
-  });
-  const ballGeometry = new THREE.SphereGeometry(0.3, 32, 32);
-  const ballMesh = new THREE.Mesh(ballGeometry, ballMaterial);
-  ballMesh.position.set(0, 0.3, 10);
-  ballMesh.castShadow = true;
-  scene.add(ballMesh);
-  ball = ballMesh;
-
-  ballBody = new CANNON.Body({
-    mass: 3,
-    shape: new CANNON.Sphere(0.3),
-    position: new CANNON.Vec3(0, 0.3, 10),
-    material: new CANNON.Material({ restitution: 0.1, friction: 0.5 })
-  });
-  world.addBody(ballBody);
-
-  // === SOLO 3 PINOS (geometría simple, sin GLB) ===
-  createPins();
-
-  // === RAYCASTER + LÁSER VISUAL ===
-  raycaster = new THREE.Raycaster();
-
-  const laserMaterial = new THREE.LineBasicMaterial({
-    color: 0x00ffff,
-    linewidth: 3,
-    opacity: 0.9,
-    transparent: true
-  });
-
-  const laserGeometry = new THREE.BufferGeometry();
-  const positions = new Float32Array(6);
-  positions.fill(0);
-  laserGeometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
-
-  laserLine = new THREE.Line(laserGeometry, laserMaterial);
-  laserLine.visible = false;
-  scene.add(laserLine);
-
-  // === CONTROLES VR + Mouse ===
-  window.addEventListener('mousemove', onPointerMove);
-  window.addEventListener('touchmove', onPointerMove);
-
-  // Detectar VR Select (botón del controlador)
-  renderer.xr.addEventListener('sessionstart', () => {
-    console.log('VR Session started');
-  });
-
-  window.addEventListener('resize', onWindowResize);
-}
-
-function createPins() {
-  const pinMaterial = new THREE.MeshStandardMaterial({
-    color: 0xffffff,
-    emissive: 0xaa00ff,
-    emissiveIntensity: 0.4
-  });
-
-  // SOLO 3 PINOS en triángulo
-  const positions = [
-    [0, 0.3, -8],
-    [-0.4, 0.3, -8.8],
-    [0.4, 0.3, -8.8]
-  ];
-
-  positions.forEach(([x, y, z]) => {
-    // Pino visual (cilindro blanco neón)
-    const pinGeometry = new THREE.CylinderGeometry(0.08, 0.08, 0.8, 16);
-    const pinMesh = new THREE.Mesh(pinGeometry, pinMaterial);
-    pinMesh.position.set(x, y, z);
-    pinMesh.castShadow = true;
-    pinMesh.receiveShadow = true;
-    scene.add(pinMesh);
-    pins.push(pinMesh);
-
-    // Cuerpo físico
-    const pinBody = new CANNON.Body({
-      mass: 0.3,
-      shape: new CANNON.Cylinder(0.08, 0.08, 0.8, 16),
-      position: new CANNON.Vec3(x, y, z),
-      material: new CANNON.Material({ restitution: 0.05, friction: 0.6 })
-    });
-    world.addBody(pinBody);
-    pinBodies.push(pinBody);
-
-    pinStartTransforms.push({
-      position: new CANNON.Vec3(x, y, z),
-      quaternion: new CANNON.Quaternion()
-    });
-  });
-}
-
+// Evento para puntero (mouse/touch)
 function onPointerMove(event) {
-  if (event.isPrimary === false) return;
-
-  let clientX, clientY;
-  if (event.touches) {
-    clientX = event.touches[0].clientX;
-    clientY = event.touches[0].clientY;
-  } else {
-    clientX = event.clientX;
-    clientY = event.clientY;
-  }
-
-  pointer.x = (clientX / window.innerWidth) * 2 - 1;
-  pointer.y = -(clientY / window.innerHeight) * 2 + 1;
+  pointer.x = (event.clientX / window.innerWidth) * 2 - 1;
+  pointer.y = -(event.clientY / window.innerHeight) * 2 + 1;
 }
 
-function shootBall() {
-  // Raycast desde la cámara
-  raycaster.setFromCamera(pointer, camera);
-  const intersects = raycaster.intersectObjects(scene.children, true);
+window.addEventListener('pointermove', onPointerMove);
 
-  if (intersects.length > 0) {
-    const direction = new THREE.Vector3();
-    direction.copy(intersects[0].point).sub(camera.position).normalize();
-
-    // Convertir a Cannon vector y aplicar velocidad
-    const velocity = new CANNON.Vec3(direction.x, direction.y, direction.z);
-    velocity.scale(15, velocity); // Fuerza del disparo
-
-    // Resetear bola a posición inicial
-    ballBody.position.set(0, 0.3, 10);
-    ballBody.velocity.set(0, 0, 0);
-    ballBody.angularVelocity.set(0, 0, 0);
-
-    // Disparar!
-    ballBody.velocity = velocity;
+// Soporte para touch en móviles
+window.addEventListener('touchmove', (event) => {
+  if (event.touches.length > 0) {
+    pointer.x = (event.touches[0].clientX / window.innerWidth) * 2 - 1;
+    pointer.y = -(event.touches[0].clientY / window.innerHeight) * 2 + 1;
   }
-}
+});
 
-function animate() {
-  requestAnimationFrame(animate);
-  world.step(1 / 60);
-
-  // Sincronizar bola
-  ball.position.copy(ballBody.position);
-  ball.quaternion.copy(ballBody.quaternion);
-
-  // Sincronizar pinos
-  for (let i = 0; i < pins.length; i++) {
-    pins[i].position.copy(pinBodies[i].position);
-    pins[i].quaternion.copy(pinBodies[i].quaternion);
-  }
-
-  // === ACTUALIZAR RAYCASTER Y LÁSER ===
-  raycaster.setFromCamera(pointer, camera);
-  const intersects = raycaster.intersectObjects(scene.children, true);
-
-  if (intersects.length > 0) {
-    const point = intersects[0].point;
-    const positions = laserLine.geometry.attributes.position.array;
-    positions[0] = camera.position.x;
-    positions[1] = camera.position.y;
-    positions[2] = camera.position.z;
-    positions[3] = point.x;
-    positions[4] = point.y + 0.01;
-    positions[5] = point.z;
-
-    laserLine.geometry.attributes.position.needsUpdate = true;
-    laserLine.visible = true;
-
-    // Color magenta si apunta a pino
-    if (pins.includes(intersects[0].object) || intersects[0].object === ball) {
-      laserLine.material.color.set(0xff00ff);
-    } else {
-      laserLine.material.color.set(0x00ffff);
-    }
-  } else {
-    laserLine.visible = false;
-  }
-
-  // === DISPARO CON BOTÓN VR / CLICK / ESPACIO ===
+// Bucle de animación
+renderer.setAnimationLoop(() => {
+  // En modo VR, usa gaze (puntero en centro)
   if (renderer.xr.isPresenting) {
-    // En VR: detectar botón del controlador
-    const session = renderer.xr.getSession();
-    if (session && session.inputSources) {
-      for (let source of session.inputSources) {
-        if (source.gamepad && source.gamepad.buttons[0].pressed) {
-          shootBall();
-          break;
-        }
-      }
-    }
+    pointer.set(0, 0);
   }
+
+  // Configura el raycaster desde la cámara con el Vector2 del puntero
+  raycaster.setFromCamera(pointer, camera);
+
+  // Calcula intersecciones
+  const intersects = raycaster.intersectObjects(scene.children, true);
+
+  // Actualiza la línea del rayo
+  const positions = rayLine.geometry.attributes.position;
+  positions.setXYZ(0, camera.position.x, camera.position.y, camera.position.z);
+  if (intersects.length > 0) {
+    // Termina en el punto de intersección
+    const point = intersects[0].point;
+    positions.setXYZ(1, point.x, point.y, point.z);
+  } else {
+    // Si no intersecta, extiende 100 unidades
+    const direction = raycaster.ray.direction.clone().normalize().multiplyScalar(100);
+    const endPoint = camera.position.clone().add(direction);
+    positions.setXYZ(1, endPoint.x, endPoint.y, endPoint.z);
+  }
+  positions.needsUpdate = true;
 
   renderer.render(scene, camera);
-}
+});
 
-function onWindowResize() {
+// Manejo de resize (para móviles)
+window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
-}
-
-// Controles desktop (opcional)
-window.addEventListener('click', shootBall);
-window.addEventListener('keydown', (e) => {
-  if (e.code === 'Space') {
-    shootBall();
-    e.preventDefault();
-  }
 });
