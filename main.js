@@ -28,7 +28,7 @@ floor.position.y = -4;
 scene.add(floor);
 
 // Paredes (blancas)
-const wallGeometry = new THREE.PlaneGeometry(10, 5);
+const wallGeometry = new THREE.PlaneGeometry(10, 15);
 const wallMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, side: THREE.DoubleSide });
 
 // Pared trasera
@@ -131,3 +131,4 @@ window.addEventListener('resize', () => {
   renderer.setSize(window.innerWidth, window.innerHeight);
 
 });
+
